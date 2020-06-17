@@ -2,6 +2,7 @@ import asyncio
 import aiohttp
 import re
 
+from termcolor import cprint
 from urllib.parse import urljoin, urlparse
 
 
@@ -17,7 +18,7 @@ class Crawler:
         self.semaphore = asyncio.BoundedSemaphore(no_more_then_y_in_parallel)
 
     async def request_on_url(self, url):
-        print('\nRequest on: {}'.format(url))
+        cprint('Request on: {}\n'.format(url), 'blue')
 
         async with self.semaphore:
             tries = 3
@@ -44,7 +45,7 @@ class Crawler:
                             if not chunk:
                                 break
 
-                            decoded = chunk.decode().replace('\n', ' ').replace('\r', '')
+                            decoded = chunk.decode("utf-8", "replace").replace('\n', ' ').replace('\r', '')
 
                             regex_pattern = r'<a[ ]+href="(.+?)".+?>.*?<\/a>'
                             anchors = re.findall(regex_pattern, decoded)
@@ -55,34 +56,22 @@ class Crawler:
 
                                     if url not in self.seen_urls and url.startswith(self.base_url):
                                         list_of_found_urls.append(url)
-                                    
-                                    print("*************************")
-                                    print(url)
-                                    print("*************************")
-                                    print(self.seen_urls)
-                                    print(url not in self.seen_urls)
-                                    print(url.startswith(self.base_url))
-                                    print("*************************")
-                                    print(list_of_found_urls)
-                                    print("*************************")
-
-                        page_code = await response.read()
-                        return page_code 
-
+      
                         return data, list_of_found_urls
                 except Exception as e:
-                    print(
-                        'An exception was caught when trying to get HTML data from the URL {}: {}'.format(url, e))
+                    cprint(
+                        'Exception caught when trying to get HTML data from URL {}: {}\n'.format(url, e), 'red')
 
     async def single_extract(self, url):
         data, list_of_found_urls = await self.request_on_url(url)
 
+        set_of_found_urls = set()
+
         if data:
             for url in list_of_found_urls:
-                list_of_found_urls.add(url)
+                set_of_found_urls.add(url)
 
-        print(list_of_found_urls)
-        return url, data, list_of_found_urls
+        return url, data, set_of_found_urls
 
     async def multiple_extract(self, go_through):
         futures = []
@@ -99,8 +88,7 @@ class Crawler:
             try:
                 results.append((await future))
             except Exception as e:
-                print(
-                    'An exception was caught when trying to wait for the future to finish: {}'.format(e))
+                cprint('Exception caught while waiting for the future to finish: {}\n'.format(e), 'yellow')
 
         return results
 
@@ -140,13 +128,11 @@ if __name__ == '__main__':
 
     loop.run_until_complete(future)
 
-    # loop.close()
-
     result = future.result()
 
-    print("\n##########################")
-    print('Length of the result is {}'.format(len(result)))
-    print('A sample of the result is ')
+    cprint("\n##########################################################", "green")
+    cprint('Length of the result is {}\n'.format(len(result)), "green")
+    cprint('A sample of the result is ', "green")
     for res in result[: 20]:
-        print(res)
-    print("##########################")
+        cprint(res, "green")
+    cprint("##########################################################", "green")
