@@ -1,9 +1,6 @@
 import asyncio
 import aiohttp
-
 import re
-
-from lxml import html as html_util
 
 from urllib.parse import urljoin, urlparse
 
@@ -20,73 +17,71 @@ class Crawler:
         self.semaphore = asyncio.BoundedSemaphore(no_more_then_y_in_parallel)
 
     async def request_on_url(self, url):
-        print(
-            "##############################################################################")
-        print('Request on: {}'.format(url))
-        print(
-            "##############################################################################")
+        print('\nRequest on: {}'.format(url))
 
         async with self.semaphore:
             tries = 3
             while True:
-                tries = tries - 1
                 if tries == 0:
                     break
 
+                tries = tries - 1
+
                 try:
                     async with self.session.get(url, timeout=30, ssl=False) as response:
+
+                        first_chunk_was_taken = False
+                        data = None
+                        list_of_found_urls = []
+
                         while True:
                             chunk = await response.content.read(2000)
+
+                            if not first_chunk_was_taken:
+                                data = chunk.decode().replace('\n', ' ').replace('\r', '')
+                                first_chunk_was_taken = True
+
                             if not chunk:
                                 break
 
-                            print("##########################")
                             decoded = chunk.decode().replace('\n', ' ').replace('\r', '')
-                            print(decoded)
-                            print("##########################")
-                            anchors = re.match(
-                                r'<a[ ]+href="(.+?)".+?>.*?<\/a>', decoded)
-                                
-                            if anchors != None:
-                                print(anchors.groups())
-                            print("##########################\n")
 
-                            print("##########################")
-                            De pus primul chunk in ceva pt ca de acolo voi lua titlul
-                            De facut Regexul sa mearga si sa preiau paginile din href-uri -> Formez urlurile tot in functia asta si le pun in list_iterator
-                            Returnez lista de variabile : primu chunk, list
-                            print("##########################")
+                            regex_pattern = r'<a[ ]+href="(.+?)".+?>.*?<\/a>'
+                            anchors = re.findall(regex_pattern, decoded)
 
-                            # page_code = await response.content.read(2000)
-                            # return page_code
+                            if anchors != []:
+                                for href in anchors:
+                                    url = urljoin(self.base_url, href)
+
+                                    if url not in self.seen_urls and url.startswith(self.base_url):
+                                        list_of_found_urls.append(url)
+                                    
+                                    print("*************************")
+                                    print(url)
+                                    print("*************************")
+                                    print(self.seen_urls)
+                                    print(url not in self.seen_urls)
+                                    print(url.startswith(self.base_url))
+                                    print("*************************")
+                                    print(list_of_found_urls)
+                                    print("*************************")
 
                         page_code = await response.read()
-                        return page_code
+                        return page_code 
+
+                        return data, list_of_found_urls
                 except Exception as e:
                     print(
                         'An exception was caught when trying to get HTML data from the URL {}: {}'.format(url, e))
 
-    def find_urls(self, html):
-        list_of_found_urls = []
-
-        dom = html_util.fromstring(html)
-
-        for href in dom.xpath('//a/@href'):
-            url = urljoin(self.base_url, href)
-            if url not in self.seen_urls and url.startswith(self.base_url):
-                list_of_found_urls.append(url)
-
-        return list_of_found_urls
-
     async def single_extract(self, url):
-        data = await self.request_on_url(url)
-
-        list_of_found_urls = set()
+        data, list_of_found_urls = await self.request_on_url(url)
 
         if data:
-            for url in self.find_urls(data):
+            for url in list_of_found_urls:
                 list_of_found_urls.add(url)
 
+        print(list_of_found_urls)
         return url, data, list_of_found_urls
 
     async def multiple_extract(self, go_through):
@@ -110,15 +105,8 @@ class Crawler:
         return results
 
     def parser(self, data):
-        dom = html_util.fromstring(data)
-
-        title = dom.xpath('//title')
-
-        # print(title[0].text)
-
-        if title:
-            title = title[0].text
-
+        regex_pattern = r'<title>(.*?)<\/title>'
+        title = re.findall(regex_pattern, data)[0]
         return {'title': title}
 
     async def crawl_start(self):
@@ -152,11 +140,11 @@ if __name__ == '__main__':
 
     loop.run_until_complete(future)
 
-    loop.close()
+    # loop.close()
 
     result = future.result()
 
-    print("##########################")
+    print("\n##########################")
     print('Length of the result is {}'.format(len(result)))
     print('A sample of the result is ')
     for res in result[: 20]:
